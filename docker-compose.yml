@@ -1,5 +1,4 @@
-# docker-compose.yml
-# Defines and runs the multi-container application for local development.
+# docker-compose.yml (in the project root)
 version: '3.8'
 
 services:
@@ -13,30 +12,44 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
       - POSTGRES_DB=budget
     ports:
-      # Expose the database port to the host machine for debugging/inspection.
       - "5432:5432"
     volumes:
-      # Persist database data on the host machine.
       - postgres_data:/var/lib/postgresql/data
 
-  # The application service
-  app:
+  # The Go backend API service
+  backend:
     container_name: budget_api
-    # Build the image from the Dockerfile in the current directory.
-    build: .
+    # Build the image from the Dockerfile in the 'backend' directory.
+    build: ./backend
     restart: always
     ports:
       - "8000:8000"
     environment:
-      # Viper will read these environment variables and override config.yml
-      # The values are sourced from the .env file on the host.
+      # The backend connects to the 'db' service by its name.
       - BUDGET_DB_URL=postgres://postgres:mysecretpassword@db:5432/budget?sslmode=disable
       - BUDGET_JWT_SECRET=${JWT_SECRET}
       - BUDGET_ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       - db
     env_file:
-      - .env
+      - ./backend/.env
+
+  # The React frontend service
+  frontend:
+    container_name: budget_ui
+    # Build the image from the Dockerfile in the 'frontend' directory.
+    build: ./frontend
+    restart: always
+    ports:
+      # Expose the frontend on port 3000 of your local machine.
+      - "3000:80"
+    environment:
+      # This tells the React app inside the container where to find the backend API.
+      # 'backend:8000' works because Docker Compose creates a network where services
+      # can communicate using their service names.
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      - backend
 
 volumes:
   # Define the named volume for data persistence.
