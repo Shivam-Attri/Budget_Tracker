@@ -1,0 +1,43 @@
+# docker-compose.yml
+# Defines and runs the multi-container application for local development.
+version: '3.8'
+
+services:
+  # The database service
+  db:
+    image: postgres:15-alpine
+    container_name: budget_db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_DB=budget
+    ports:
+      # Expose the database port to the host machine for debugging/inspection.
+      - "5432:5432"
+    volumes:
+      # Persist database data on the host machine.
+      - postgres_data:/var/lib/postgresql/data
+
+  # The application service
+  app:
+    container_name: budget_api
+    # Build the image from the Dockerfile in the current directory.
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      # Viper will read these environment variables and override config.yml
+      # The values are sourced from the .env file on the host.
+      - BUDGET_DB_URL=postgres://postgres:mysecretpassword@db:5432/budget?sslmode=disable
+      - BUDGET_JWT_SECRET=${JWT_SECRET}
+      - BUDGET_ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+volumes:
+  # Define the named volume for data persistence.
+  postgres_data:

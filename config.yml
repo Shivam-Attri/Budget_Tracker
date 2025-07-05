@@ -1,0 +1,28 @@
+# config.yml
+# Default configuration file. Values here can be overridden by environment variables.
+server:
+  host: "127.0.0.1"
+  port: 8000
+  default_page_limit: 10
+  access_token_ttl_minutes: 15
+  refresh_token_ttl_hours: 168 # 7 days
+  allowed_sort_fields: ["date", "amount"]
+  timeout:
+    read: 15
+    write: 15
+    idle: 60
+    graceful_shutdown: 5
+
+database:
+  url: "postgres://postgres:mysecretpassword@localhost:5432/budget?sslmode=disable"
+
+rate_limiter:
+  enabled: true
+  rps: 2
+  burst: 4
+
+# Secrets should not be stored here in production.
+# They are best managed via environment variables.
+# For local development, you can uncomment and use these.
+#  jwt_secret: "a-very-long-and-random-secret-for-jwt"
+#  encryption_key: "your-super-secret-32-byte-key!!"
