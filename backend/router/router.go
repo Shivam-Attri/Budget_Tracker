@@ -3,14 +3,17 @@
 package router
 
 import (
+	"net/http"
+
 	"your_username/budget-tracker/auth"
-	"your_username/budget-tracker/handlers"
+	"your_username/budget-tracker/handlers" // Your local handlers package
 	"your_username/budget-tracker/middleware"
 
+	cors "github.com/gorilla/handlers" // Aliased import for the CORS library
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(env *handlers.Env) *mux.Router {
+func NewRouter(env *handlers.Env) http.Handler { // Return http.Handler to allow for CORS middleware wrapping
 	r := mux.NewRouter()
 
 	// Apply global middleware first.
@@ -50,5 +53,11 @@ func NewRouter(env *handlers.Env) *mux.Router {
 	// Reports Routes
 	api.HandleFunc("/reports/summary", env.GetMonthlySummaryHandler).Methods("GET")
 
-	return r
+	// Setup CORS headers using the aliased package name.
+	corsOpts := cors.AllowedOrigins([]string{"http://localhost:3000", "http://localhost:5173"}) // Vite's default port is 5173
+	corsMethods := cors.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
+	corsHeaders := cors.AllowedHeaders([]string{"Content-Type", "Authorization"})
+
+	// Wrap the main router with the CORS middleware.
+	return cors.CORS(corsOpts, corsMethods, corsHeaders)(r)
 }

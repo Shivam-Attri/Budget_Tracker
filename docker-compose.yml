@@ -1,6 +1,3 @@
-# docker-compose.yml (in the project root)
-version: '3.8'
-
 services:
   # The database service
   db:
@@ -12,8 +9,10 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
       - POSTGRES_DB=budget
     ports:
+      # Expose the database port to the host machine for debugging/inspection.
       - "5432:5432"
     volumes:
+      # Persist database data on the host machine.
       - postgres_data:/var/lib/postgresql/data
 
   # The Go backend API service
@@ -25,7 +24,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # The backend connects to the 'db' service by its name.
+      # CORRECTED: The backend connects to the 'db' service by its name, not 'localhost'.
       - BUDGET_DB_URL=postgres://postgres:mysecretpassword@db:5432/budget?sslmode=disable
       - BUDGET_JWT_SECRET=${JWT_SECRET}
       - BUDGET_ENCRYPTION_KEY=${ENCRYPTION_KEY}
@@ -43,11 +42,7 @@ services:
     ports:
       # Expose the frontend on port 3000 of your local machine.
       - "3000:80"
-    environment:
-      # This tells the React app inside the container where to find the backend API.
-      # 'backend:8000' works because Docker Compose creates a network where services
-      # can communicate using their service names.
-      - VITE_API_URL=http://backend:8000
+    # No environment variables needed here if the API URL is hardcoded or handled at build time
     depends_on:
       - backend
 

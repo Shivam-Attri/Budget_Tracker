@@ -15,7 +15,6 @@ import (
 	"your_username/budget-tracker/models"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -64,29 +63,50 @@ type DBStore struct {
 func (store *DBStore) Ping(ctx context.Context) error { return store.DB.PingContext(ctx) }
 
 // --- User Methods ---
+// CreateUser is now wrapped in a transaction to ensure atomicity.
 func (store *DBStore) CreateUser(user *models.User) error {
+	tx, err := store.DB.Begin()
+	if err != nil {
+		return err
+	}
+	// Defer a rollback in case of a panic. If Commit() succeeds, the rollback is a no-op.
+	defer tx.Rollback()
+
 	user.ID = uuid.New().String()
 	user.CreatedAt = time.Now()
 	hashedPassword, err := auth.HashPassword(user.Password)
 	if err != nil {
 		return err
 	}
-	query := `INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)`
-	_, err = store.DB.Exec(query, user.ID, user.Email, hashedPassword, user.CreatedAt)
+
+	userQuery := `INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)`
+	_, err = tx.Exec(userQuery, user.ID, user.Email, hashedPassword, user.CreatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "users_email_key") {
 			return ErrEmailExists
 		}
 		return err
 	}
+
+	// Create default categories within the same transaction.
 	defaultCategories := []string{"Groceries", "Salary", "Rent", "Utilities", "Transport"}
+	categoryQuery := `INSERT INTO categories (id, user_id, name, created_at) VALUES ($1, $2, $3, $4)`
+
 	for _, catName := range defaultCategories {
-		cat := &models.Category{UserID: user.ID, Name: catName}
-		if err := store.CreateCategory(cat); err != nil {
-			log.Error().Err(err).Msgf("Failed to create default category '%s' for user %s", catName, user.ID)
+		encryptedName, err := encryption.Encrypt([]byte(catName), store.Key)
+		if err != nil {
+			// If encryption fails, the whole transaction should fail.
+			return fmt.Errorf("failed to encrypt default category name: %w", err)
+		}
+		_, err = tx.Exec(categoryQuery, uuid.New(), user.ID, encryptedName, time.Now())
+		if err != nil {
+			// If a category insert fails, the whole transaction should fail.
+			return fmt.Errorf("failed to insert default category: %w", err)
 		}
 	}
-	return nil
+
+	// If all operations were successful, commit the transaction.
+	return tx.Commit()
 }
 
 func (store *DBStore) GetUserByEmail(email string) (*models.User, error) {

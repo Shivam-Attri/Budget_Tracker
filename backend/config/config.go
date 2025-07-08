@@ -63,9 +63,13 @@ func LoadConfig(path string) (config Config, err error) {
 
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("BUDGET")
-	viper.BindEnv("database.url", "DB_URL")
-	viper.BindEnv("server.jwt_secret", "JWT_SECRET")
-	viper.BindEnv("server.encryption_key", "ENCRYPTION_KEY")
+
+	// --- FIX ---
+	// Explicitly bind the database.url config key to the BUDGET_DB_URL environment variable.
+	// The `BindEnv` function does not automatically use the prefix.
+	viper.BindEnv("database.url", "BUDGET_DB_URL")
+	viper.BindEnv("server.jwt_secret", "BUDGET_JWT_SECRET")
+	viper.BindEnv("server.encryption_key", "BUDGET_ENCRYPTION_KEY")
 
 	err = viper.ReadInConfig()
 	if _, ok := err.(viper.ConfigFileNotFoundError); err != nil && !ok {

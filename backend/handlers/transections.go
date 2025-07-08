@@ -16,24 +16,32 @@ import (
 	"your_username/budget-tracker/utils"
 
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 )
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
 
 func (env *Env) CreateTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	var t models.Transaction
 	if err := utils.ParseAndValidate(r, &t); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	t.UserID = userID
 
 	if err := env.DB.CreateTransaction(&t); err != nil {
-		http.Error(w, "Failed to create transaction", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to create transaction in DB")
+		writeJSONError(w, http.StatusInternalServerError, "Failed to create transaction")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -44,7 +52,7 @@ func (env *Env) CreateTransactionHandler(w http.ResponseWriter, r *http.Request)
 func (env *Env) GetTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -54,7 +62,8 @@ func (env *Env) GetTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	transactions, totalRecords, err := env.DB.GetTransactions(userID, limit, offset, filter)
 	if err != nil {
-		http.Error(w, "Failed to retrieve transactions", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to retrieve transactions from DB")
+		writeJSONError(w, http.StatusInternalServerError, "Failed to retrieve transactions")
 		return
 	}
 
@@ -71,7 +80,7 @@ func (env *Env) GetTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 func (env *Env) GetTransactionByIDHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	params := mux.Vars(r)
@@ -80,9 +89,10 @@ func (env *Env) GetTransactionByIDHandler(w http.ResponseWriter, r *http.Request
 	transaction, err := env.DB.GetTransactionByID(id, userID)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			http.Error(w, "Transaction not found", http.StatusNotFound)
+			writeJSONError(w, http.StatusNotFound, "Transaction not found")
 		} else {
-			http.Error(w, "Failed to retrieve transaction", http.StatusInternalServerError)
+			log.Error().Err(err).Str("transaction_id", id).Msg("Failed to retrieve transaction by ID")
+			writeJSONError(w, http.StatusInternalServerError, "Failed to retrieve transaction")
 		}
 		return
 	}
@@ -93,7 +103,7 @@ func (env *Env) GetTransactionByIDHandler(w http.ResponseWriter, r *http.Request
 func (env *Env) UpdateTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	params := mux.Vars(r)
@@ -101,15 +111,16 @@ func (env *Env) UpdateTransactionHandler(w http.ResponseWriter, r *http.Request)
 
 	var t models.Transaction
 	if err := utils.ParseAndValidate(r, &t); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := env.DB.UpdateTransaction(id, userID, &t); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			http.Error(w, "Transaction not found", http.StatusNotFound)
+			writeJSONError(w, http.StatusNotFound, "Transaction not found")
 		} else {
-			http.Error(w, "Failed to update transaction", http.StatusInternalServerError)
+			log.Error().Err(err).Str("transaction_id", id).Msg("Failed to update transaction")
+			writeJSONError(w, http.StatusInternalServerError, "Failed to update transaction")
 		}
 		return
 	}
@@ -121,7 +132,7 @@ func (env *Env) UpdateTransactionHandler(w http.ResponseWriter, r *http.Request)
 func (env *Env) DeleteTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	params := mux.Vars(r)
@@ -129,9 +140,10 @@ func (env *Env) DeleteTransactionHandler(w http.ResponseWriter, r *http.Request)
 
 	if err := env.DB.DeleteTransaction(id, userID); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			http.Error(w, "Transaction not found", http.StatusNotFound)
+			writeJSONError(w, http.StatusNotFound, "Transaction not found")
 		} else {
-			http.Error(w, "Failed to delete transaction", http.StatusInternalServerError)
+			log.Error().Err(err).Str("transaction_id", id).Msg("Failed to delete transaction")
+			writeJSONError(w, http.StatusInternalServerError, "Failed to delete transaction")
 		}
 		return
 	}

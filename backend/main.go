@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -41,15 +42,26 @@ func main() {
 	// Create/update the necessary tables
 	database.CreateTables(db)
 
+	// --- CRITICAL FIX: Decode the encryption key ---
+	// The key is expected to be a Base64 encoded string. We must decode it to raw bytes.
+	encryptionKeyBytes, err := base64.StdEncoding.DecodeString(cfg.Server.EncryptionKey)
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("Failed to decode encryption key from Base64")
+	}
+	// AES requires a key of 16, 24, or 32 bytes.
+	if len(encryptionKeyBytes) != 32 {
+		zlog.Fatal().Msgf("Invalid encryption key length: must be 32 bytes, but got %d", len(encryptionKeyBytes))
+	}
+
 	// Initialize packages
 	auth.Init(cfg.Server.JWTSecret, cfg.Server.AccessTokenTTL, cfg.Server.RefreshTokenTTL)
 	utils.InitValidator()
 	middleware.InitRateLimiter(cfg.RateLimiter)
 
-	// Create the data store
+	// Create the data store with the correctly decoded key
 	store := &database.DBStore{
 		DB:  db,
-		Key: []byte(cfg.Server.EncryptionKey),
+		Key: encryptionKeyBytes,
 	}
 
 	// Create the environment for dependency injection
